@@ -1,8 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { User, Award, Route, ShieldCheck, Settings, LogOut } from "lucide-react";
+import { Award, Route, ShieldCheck, LogOut } from "lucide-react";
 import { useToast } from "@/context/ToastContext";
 
 interface ProfileMenuProps {
@@ -12,6 +12,15 @@ interface ProfileMenuProps {
 
 export default function ProfileMenu({ isOpen, onClose }: ProfileMenuProps) {
   const { showToast } = useToast();
+  const [user, setUser] = useState<{ display_name: string; username: string; points: number; badge_count: number } | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((json) => setUser(json.success ? json.data : null))
+      .catch(() => setUser(null));
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -22,11 +31,13 @@ export default function ProfileMenu({ isOpen, onClose }: ProfileMenuProps) {
     >
       <div className="p-4 border-b border-line flex items-center gap-3">
         <div className="w-10 h-10 rounded-full bg-[#5271FF] flex items-center justify-center font-bold text-white text-sm">
-          T
+          {(user?.display_name || "?").slice(0, 1)}
         </div>
         <div className="min-w-0">
-          <h4 className="font-bold text-sm text-white truncate">Teertha</h4>
-          <span className="text-[11px] text-amber font-semibold">2 of 28 Badges Unlocked</span>
+          <h4 className="font-bold text-sm text-white truncate">{user?.display_name || "Guest"}</h4>
+          <span className="text-[11px] text-amber font-semibold">
+            {user ? `${user.badge_count} badges · ${user.points} pts` : "Not signed in"}
+          </span>
         </div>
       </div>
 
@@ -55,23 +66,21 @@ export default function ProfileMenu({ isOpen, onClose }: ProfileMenuProps) {
           <ShieldCheck className="w-4 h-4 text-blue-400" />
           <span>Claimed Listings</span>
         </Link>
-        <button 
-          onClick={() => {
-            showToast("Settings dialog opened", "info");
-            onClose();
-          }}
-          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-muted hover:bg-line/50 hover:text-white transition-colors text-left"
-        >
-          <Settings className="w-4 h-4" />
-          <span>Account Settings</span>
-        </button>
+        {!user && (
+          <Link href="/login" onClick={onClose} className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-amber hover:bg-line/50 transition-colors">
+            Sign in
+          </Link>
+        )}
       </div>
 
       <div className="p-2 border-t border-line bg-background/40">
         <button 
-          onClick={() => {
-            showToast("Logged out successfully");
+          onClick={async () => {
+            await fetch("/api/auth/logout", { method: "POST" });
+            setUser(null);
+            showToast("Signed out");
             onClose();
+            window.location.href = "/";
           }}
           className="flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-red-400 hover:bg-red-500/10 transition-colors text-xs font-semibold"
         >

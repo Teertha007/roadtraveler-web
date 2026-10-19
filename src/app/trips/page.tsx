@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
 import { 
@@ -9,13 +9,14 @@ import {
 } from "lucide-react";
 
 export default function TripsPage() {
+  const [tripId, setTripId] = useState<string>("");
   const [activeTrip, setActiveTrip] = useState<any>({
-    title: "Southwest Red Rock Discovery",
-    duration: "6 Days · 740 Miles · 4 Stops",
-    route: "Las Vegas → Zion NP → Moab → Denver",
+    title: "Your trips",
+    duration: "Sign in to load your itinerary",
+    route: "",
   });
 
-  const [itinerary, setItinerary] = useState([
+  const [itinerary, setItinerary] = useState<any[]>([
     {
       id: 1,
       type: "checkpoint",
@@ -64,26 +65,53 @@ export default function TripsPage() {
   const [newStopText, setNewStopText] = useState("");
   const [isCopied, setIsCopied] = useState(false);
 
-  const addStop = () => {
-    if (!newStopText.trim()) return;
-    const newStop = {
-      id: Date.now(),
-      type: "place",
-      title: newStopText,
-      location: "En route",
-      note: "Custom waypoint added to itinerary.",
-      days: 1,
-      icon: "tent",
-    };
-    setItinerary([...itinerary, newStop]);
+  useEffect(() => {
+    fetch("/api/trips")
+      .then((r) => r.json())
+      .then((json) => {
+        if (!json.success || !json.data?.[0]) return;
+        const trip = json.data[0];
+        setTripId(trip.id);
+        setActiveTrip({
+          title: trip.title,
+          duration: `${trip.stops.length} stops`,
+          route: trip.description || trip.stops.map((s: { location: string }) => s.location).filter(Boolean).join(" → "),
+        });
+        setItinerary(trip.stops.map((s: { id: string; stop_type: string; custom_title: string; location: string; note: string; days_duration: number }) => ({
+          id: s.id,
+          type: s.stop_type,
+          title: s.custom_title,
+          location: s.location,
+          note: s.note,
+          days: s.days_duration,
+        })));
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const addStop = async () => {
+    if (!newStopText.trim() || !tripId) return;
+    const res = await fetch(`/api/trips/${tripId}/stops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: newStopText, location: "En route", note: "Added from the planner." }),
+    });
+    const json = await res.json();
+    if (!json.success) return;
+    const s = json.data;
+    setItinerary([...itinerary, { id: s.id, type: s.stop_type, title: s.custom_title, location: s.location, note: s.note, days: s.days_duration }]);
     setNewStopText("");
   };
 
-  const removeStop = (id: number) => {
-    setItinerary(itinerary.filter(item => item.id !== id));
+  const removeStop = async (id: string | number) => {
+    const res = await fetch(`/api/stops/${id}`, { method: "DELETE" });
+    const json = await res.json();
+    if (json.success) setItinerary(itinerary.filter((item) => item.id !== id));
   };
 
-  const handleShare = () => {
+  const handleShare = async () => {
+    if (!tripId) return;
+    await navigator.clipboard.writeText(`${window.location.origin}/trips?trip=${tripId}`);
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
   };

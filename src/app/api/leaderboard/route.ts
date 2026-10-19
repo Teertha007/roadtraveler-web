@@ -1,11 +1,10 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/supabase/db";
+import { fail, ok } from "@/lib/http";
+import { store } from "@/lib/store";
 
 export async function GET() {
   try {
-    const leaderboard = await db.getLeaderboard();
-    return NextResponse.json({ success: true, count: leaderboard.length, data: leaderboard });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return ok(await store.leaderboard());
+  } catch (error) {
+    return fail(error, 500);
   }
 }

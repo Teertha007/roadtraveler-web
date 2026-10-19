@@ -1,15 +1,14 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/supabase/db";
+import { fail, ok } from "@/lib/http";
+import { getUserId } from "@/lib/session";
+import { store } from "@/lib/store";
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = await params;
-    const result = await db.toggleLikePost(id);
-    return NextResponse.json(result);
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const userId = await getUserId();
+    if (!userId) return fail(new Error("Sign in required."));
+    const { id } = await ctx.params;
+    return ok(await store.toggleLike(userId, id));
+  } catch (error) {
+    return fail(error, 500);
   }
 }

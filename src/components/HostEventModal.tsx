@@ -26,19 +26,21 @@ export default function HostEventModal({ isOpen, onClose, onEventCreated }: Host
       return;
     }
 
-    const newEvent = {
-      id: Date.now().toString(),
-      title,
-      location,
-      date: date || "OCT 28",
-      status: "Going",
-      going_count: 1,
-      interested_count: 0,
-    };
-
-    if (onEventCreated) onEventCreated(newEvent);
-    showToast(`"${title}" published to RoadTraveler Gatherings!`);
-    onClose();
+    fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, location, date, description }),
+    })
+      .then((r) => r.json())
+      .then((json) => {
+        if (!json.success) {
+          showToast(json.error || "Sign in to host an event", "error");
+          return;
+        }
+        if (onEventCreated) onEventCreated(json.data);
+        showToast(`"${title}" is on the events list`);
+        onClose();
+      });
   };
 
   return (
@@ -85,10 +87,9 @@ export default function HostEventModal({ isOpen, onClose, onEventCreated }: Host
           <div>
             <label className="text-xs font-bold text-white block mb-1">Date & Time</label>
             <input 
-              type="text"
+              type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              placeholder="e.g. OCT 28 · 6:00 PM"
               className="w-full bg-background border border-line rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-amber"
             />
           </div>

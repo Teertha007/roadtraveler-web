@@ -28,11 +28,26 @@ export default function ClaimListingModal({ isOpen, onClose, listingName = "Zion
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      showToast("Claim submitted! Our admin team reviews within 24-48 hours.");
-      onClose();
-    }, 800);
+    fetch("/api/claims", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        listing_name: listingName,
+        business_email: businessEmail,
+        phone,
+        role,
+      }),
+    })
+      .then((r) => r.json())
+      .then((json) => {
+        setIsSubmitting(false);
+        if (!json.success) {
+          showToast(json.error || "Sign in to claim a listing", "error");
+          return;
+        }
+        showToast("Claim submitted. An admin can approve or decline it.");
+        onClose();
+      });
   };
 
   return (

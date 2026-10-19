@@ -48,11 +48,16 @@ export default function EventsPage() {
     showToast(status === "going" ? "RSVP Confirmed: You're going!" : "Marked as Interested");
 
     try {
-      await fetch(`/api/events/${id}/rsvp`, {
+      const res = await fetch(`/api/events/${id}/rsvp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
+      const json = await res.json();
+      if (!json.success) {
+        setRsvpMap((prev) => ({ ...prev, [id]: status === "going" ? "Interested" : "Going" }));
+        showToast(json.error || "Sign in to RSVP", "error");
+      }
     } catch (err) {
       console.error("Failed to RSVP:", err);
     }

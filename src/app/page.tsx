@@ -115,11 +115,18 @@ export default function Home() {
         }),
       });
       const json = await res.json();
+      if (res.status === 401) {
+        showToast("Sign in to post", "error");
+        router.push("/login");
+        return;
+      }
       if (json.success && json.data) {
         setFeedPosts([json.data, ...feedPosts]);
         setPostText("");
         setComposerAttachment(null);
-        showToast("Road update posted to the community feed!");
+        showToast("Posted to the community feed");
+      } else {
+        showToast(json.error || "Could not publish post", "error");
       }
     } catch (err) {
       console.error("Failed to create post:", err);
@@ -295,7 +302,7 @@ export default function Home() {
                       onHashtagClick={(tag: string) => setSearchQuery(tag)}
                       onCommentClick={() => setActiveCommentPost(post)}
                       onShareClick={() => setActiveSharePost(post)}
-                      onAddToTripClick={() => setActiveTripPlace({ name: post.title || post.location, location: post.location })}
+                      onAddToTripClick={() => setActiveTripPlace({ name: post.location || post.title, location: post.location, placeId: post.place_id })}
                     >
                       {post.imageText && (
                         <div className="aspect-[16/9] bg-line rounded-xl mt-4 relative overflow-hidden flex items-end p-4">
@@ -485,6 +492,7 @@ export default function Home() {
           isOpen={Boolean(activeTripPlace)} 
           placeName={activeTripPlace.name}
           placeLocation={activeTripPlace.location}
+          placeId={activeTripPlace.placeId}
           onClose={() => setActiveTripPlace(null)} 
         />
       )}
@@ -509,24 +517,26 @@ function StoryItem({ add, name, hasRing, imgColor = 'bg-line', onClick }: { add?
 
 function FeedPost({ 
   id, author, time, location, title, text, tag, isBad, likes: initialLikes, comments, avatarColor, avatarInitial, children, actionButton,
-  onHashtagClick, onCommentClick, onShareClick, onAddToTripClick
+  liked_by_me, onHashtagClick, onCommentClick, onShareClick, onAddToTripClick
 }: any) {
   const { showToast } = useToast();
-  const [liked, setLiked] = useState(false);
+  const router = useRouter();
+  const [liked, setLiked] = useState(!!liked_by_me);
   const [saved, setSaved] = useState(false);
   const [added, setAdded] = useState(false);
   const [likesCount, setLikesCount] = useState(initialLikes || 0);
 
   const handleLikeToggle = async () => {
-    const nextLiked = !liked;
-    setLiked(nextLiked);
-    setLikesCount((prev: number) => prev + (nextLiked ? 1 : -1));
-    showToast(nextLiked ? "Post liked!" : "Like removed", "info");
-
-    try {
-      await fetch(`/api/posts/${id}/like`, { method: "POST" });
-    } catch (err) {
-      console.error(err);
+    const res = await fetch(`/api/posts/${id}/like`, { method: "POST" });
+    const json = await res.json();
+    if (res.status === 401) {
+      showToast("Sign in to like posts", "error");
+      router.push("/login");
+      return;
+    }
+    if (json.success) {
+      setLiked(json.data.liked);
+      setLikesCount(json.data.likes);
     }
   };
 

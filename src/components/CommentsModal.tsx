@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { X, Send, Heart, MessageSquare, MapPin } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { X, Send, MessageSquare } from "lucide-react";
 import { useToast } from "@/context/ToastContext";
 
 interface CommentsModalProps {
@@ -15,54 +15,33 @@ interface CommentsModalProps {
 export default function CommentsModal({ isOpen, onClose, postTitle, postAuthor, postId }: CommentsModalProps) {
   const { showToast } = useToast();
   const [commentText, setCommentText] = useState("");
-  const [comments, setComments] = useState([
-    {
-      id: 1,
-      author: "JohnRV",
-      initial: "J",
-      color: "bg-[#5271FF]",
-      text: "Awesome tip about parking before 5am! The lot fills up super fast on weekends.",
-      time: "1h ago",
-      likes: 4,
-    },
-    {
-      id: 2,
-      author: "OffRoad Joe",
-      initial: "O",
-      color: "bg-[#F43F5E]",
-      text: "Are dogs allowed on the overlook trail? Bringing my German Shepherd next week.",
-      time: "45m ago",
-      likes: 2,
-    },
-    {
-      id: 3,
-      author: "Sarah Adventures",
-      initial: "S",
-      color: "bg-[#10B981]",
-      text: "@OffRoad Joe Yes! Dogs on leashes are permitted on the paved pathway.",
-      time: "20m ago",
-      likes: 5,
-    },
-  ]);
+  const [comments, setComments] = useState<{ id: string; author: string; initial: string; color: string; text: string; time: string }[]>([]);
+
+  useEffect(() => {
+    if (!isOpen || !postId) return;
+    fetch(`/api/posts/${postId}/comments`)
+      .then((r) => r.json())
+      .then((json) => { if (json.success) setComments(json.data); })
+      .catch(() => setComments([]));
+  }, [isOpen, postId]);
 
   if (!isOpen) return null;
 
-  const handleAddComment = () => {
-    if (!commentText.trim()) return;
-
-    const newComment = {
-      id: Date.now(),
-      author: "Teertha (You)",
-      initial: "T",
-      color: "bg-amber-600",
-      text: commentText,
-      time: "Just now",
-      likes: 0,
-    };
-
-    setComments([...comments, newComment]);
+  const handleAddComment = async () => {
+    if (!commentText.trim() || !postId) return;
+    const res = await fetch(`/api/posts/${postId}/comments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: commentText }),
+    });
+    const json = await res.json();
+    if (!json.success) {
+      showToast(json.error || "Sign in to comment", "error");
+      return;
+    }
+    setComments([...comments, json.data]);
     setCommentText("");
-    showToast("Comment posted!");
+    showToast("Comment posted");
   };
 
   return (

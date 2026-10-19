@@ -257,3 +257,31 @@ BEGIN
     ORDER BY distance_miles ASC;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Row level security. Run after the tables exist.
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE post_likes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE post_comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE places ENABLE ROW LEVEL SECURITY;
+ALTER TABLE events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE event_rsvps ENABLE ROW LEVEL SECURITY;
+ALTER TABLE trips ENABLE ROW LEVEL SECURITY;
+ALTER TABLE trip_stops ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE claims ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "public read profiles" ON profiles FOR SELECT USING (true);
+CREATE POLICY "own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "public read posts" ON posts FOR SELECT USING (true);
+CREATE POLICY "own posts" ON posts FOR INSERT WITH CHECK (auth.uid() = author_id);
+CREATE POLICY "public read places" ON places FOR SELECT USING (true);
+CREATE POLICY "public read events" ON events FOR SELECT USING (true);
+CREATE POLICY "auth create events" ON events FOR INSERT WITH CHECK (auth.uid() = creator_id);
+CREATE POLICY "own trips" ON trips FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "own stops" ON trip_stops FOR ALL USING (
+  EXISTS (SELECT 1 FROM trips t WHERE t.id = trip_id AND t.user_id = auth.uid())
+);
+CREATE POLICY "public read reviews" ON reviews FOR SELECT USING (true);
+CREATE POLICY "own reviews" ON reviews FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "own claims" ON claims FOR ALL USING (auth.uid() = user_id);

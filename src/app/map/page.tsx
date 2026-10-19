@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
-import GoogleMapView from "@/components/GoogleMapView";
+
+const LeafletMap = dynamic(() => import("@/components/LeafletMap"), { ssr: false });
 import AddToTripModal from "@/components/AddToTripModal";
 import { useToast } from "@/context/ToastContext";
 import { 
@@ -18,6 +20,7 @@ export default function MapPage() {
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [nearMeActive, setNearMeActive] = useState<boolean>(false);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [isTripModalOpen, setIsTripModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
@@ -26,6 +29,11 @@ export default function MapPage() {
         const params = new URLSearchParams();
         if (activeCategory !== "all") params.append("category", activeCategory);
         if (searchQuery) params.append("search", searchQuery);
+        if (nearMeActive && coords) {
+          params.append("lat", String(coords.lat));
+          params.append("lng", String(coords.lng));
+          params.append("radius", "50");
+        }
 
         const res = await fetch(`/api/places?${params.toString()}`);
         const json = await res.json();
@@ -40,7 +48,7 @@ export default function MapPage() {
       }
     }
     loadPlaces();
-  }, [activeCategory, searchQuery]);
+  }, [activeCategory, searchQuery, nearMeActive, coords]);
 
   const categories = [
     { id: "all", label: "All Places", icon: <Layers className="w-4 h-4" /> },
@@ -52,9 +60,9 @@ export default function MapPage() {
   ];
 
   const handleDirections = (place: any) => {
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}&destination_place_id=${encodeURIComponent(place.name)}`;
+    const url = `https://www.openstreetmap.org/directions?to=${place.lat}%2C${place.lng}`;
     window.open(url, "_blank");
-    showToast(`Opening Google Maps directions to ${place.name}...`);
+    showToast(`Opening directions to ${place.name}`);
   };
 
   return (
@@ -67,8 +75,20 @@ export default function MapPage() {
           setSearchQuery={setSearchQuery}
           nearMeActive={nearMeActive}
           onNearMeToggle={() => {
-            setNearMeActive(!nearMeActive);
-            showToast(nearMeActive ? "GPS Disabled" : "Locating nearby places on Google Maps (50 mi radius)");
+            if (nearMeActive) {
+              setNearMeActive(false);
+              setCoords(null);
+              showToast("Near Me off", "info");
+              return;
+            }
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+                setNearMeActive(true);
+                showToast("Showing places within 50 miles");
+              },
+              () => showToast("Location permission was blocked", "error")
+            );
           }}
         />
 
@@ -102,7 +122,7 @@ export default function MapPage() {
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
               <div className="flex items-center justify-between text-xs text-muted mb-1 px-1">
                 <span>{places.length} places found</span>
-                <span>Google Maps Synced</span>
+                <span>OpenStreetMap</span>
               </div>
 
               {places.map((place) => {
@@ -149,14 +169,10 @@ export default function MapPage() {
 
           {/* Real Google Maps Area */}
           <div className="flex-1 relative h-full">
-            <GoogleMapView
+            <LeafletMap
               places={places}
               selectedPlace={selectedPlace}
-              onSelectPlace={(place) => {
-                setSelectedPlace(place);
-                showToast(`Selected: ${place.name}`);
-              }}
-              nearMeActive={nearMeActive}
+              onSelectPlace={(place) => setSelectedPlace(place)}
             />
 
             {/* Selected Place Overlay Card */}

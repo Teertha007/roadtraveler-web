@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { X, Route, Plus, Check, MapPin } from "lucide-react";
 import { useToast } from "@/context/ToastContext";
 
@@ -9,28 +9,57 @@ interface AddToTripModalProps {
   onClose: () => void;
   placeName?: string;
   placeLocation?: string;
+  placeId?: string | null;
 }
 
-export default function AddToTripModal({ isOpen, onClose, placeName = "Horseshoe Bend Overlook", placeLocation = "Page, AZ" }: AddToTripModalProps) {
+export default function AddToTripModal({ isOpen, onClose, placeName = "Place", placeLocation = "", placeId = null }: AddToTripModalProps) {
   const { showToast } = useToast();
-  const [selectedTrip, setSelectedTrip] = useState("trip-1");
+  const [selectedTrip, setSelectedTrip] = useState("");
   const [newTripName, setNewTripName] = useState("");
   const [isCreatingNew, setIsCreatingNew] = useState(false);
+  const [existingTrips, setExistingTrips] = useState<{ id: string; title: string; stops: { id: string }[] }[]>([]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    fetch("/api/trips")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success) {
+          setExistingTrips(json.data);
+          if (json.data[0]) setSelectedTrip(json.data[0].id);
+        }
+      })
+      .catch(() => setExistingTrips([]));
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const existingTrips = [
-    { id: "trip-1", title: "Southwest Red Rock Discovery", stops: 4, days: "6 Days" },
-    { id: "trip-2", title: "Pacific Coast Highway (Highway 1)", stops: 7, days: "10 Days" },
-    { id: "trip-3", title: "Colorado Fall Colors Loop", stops: 3, days: "4 Days" },
-  ];
-
-  const handleSaveToTrip = () => {
-    const targetTitle = isCreatingNew 
-      ? newTripName || "New Road Adventure"
-      : existingTrips.find(t => t.id === selectedTrip)?.title;
-
-    showToast(`Added "${placeName}" to ${targetTitle}!`);
+  const handleSaveToTrip = async () => {
+    let tripId = selectedTrip;
+    if (isCreatingNew || !tripId) {
+      const created = await fetch("/api/trips", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: newTripName || "New trip" }),
+      });
+      const json = await created.json();
+      if (!json.success) {
+        showToast(json.error || "Sign in to save a trip", "error");
+        return;
+      }
+      tripId = json.data.id;
+    }
+    const saved = await fetch(`/api/trips/${tripId}/stops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: placeName, location: placeLocation, place_id: placeId, note: "Added from the feed." }),
+    });
+    const result = await saved.json();
+    if (!result.success) {
+      showToast(result.error || "Could not add this stop", "error");
+      return;
+    }
+    showToast(`Added "${placeName}" to your trip`);
     onClose();
   };
 
@@ -82,7 +111,7 @@ export default function AddToTripModal({ isOpen, onClose, placeName = "Horseshoe
                 >
                   <div>
                     <h5 className="text-xs text-white">{trip.title}</h5>
-                    <span className="text-[10px] text-muted">{trip.stops} stops · {trip.days}</span>
+                    <span className="text-[10px] text-muted">{trip.stops?.length || 0} stops</span>
                   </div>
                   {isSelected && <Check className="w-4 h-4 text-amber" />}
                 </div>
