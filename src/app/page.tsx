@@ -3,13 +3,14 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Sidebar from "@/components/Sidebar";
+import AppShell from "@/components/AppShell";
 import Navbar from "@/components/Navbar";
 import StoryViewerModal from "@/components/StoryViewerModal";
 import CommentsModal from "@/components/CommentsModal";
 import ShareModal from "@/components/ShareModal";
 import AddToTripModal from "@/components/AddToTripModal";
 import { useToast } from "@/context/ToastContext";
+import { compressImageFile } from "@/lib/compress-client";
 import { 
   MapPin, Tent, Caravan, Trees, Map, Heart, Compass, Calendar, 
   Users, BookOpen, Route, Plus, MessageSquare, Share2, Bookmark, 
@@ -183,13 +184,10 @@ export default function Home() {
     }
   };
 
-  return (
-    <div className="flex w-full h-screen overflow-hidden bg-background text-foreground">
-      {/* Left Sidebar */}
-      <Sidebar onAddPostClick={() => document.getElementById("composer-input")?.focus()} />
+  const focusComposer = () => document.getElementById("composer-input")?.focus();
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+  return (
+    <AppShell onAddPostClick={focusComposer}>
         <Navbar 
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
@@ -197,15 +195,13 @@ export default function Home() {
           toggleFilter={toggleFilter}
           nearMeActive={nearMeActive}
           onNearMeToggle={handleNearMeToggle}
-          onNewPostClick={() => document.getElementById("composer-input")?.focus()}
+          onNewPostClick={focusComposer}
         />
 
-        {/* Scrollable Content Container */}
         <div className="flex-1 overflow-y-auto">
           <div className="flex justify-center w-full min-w-0">
-            <div className="flex w-full max-w-[1280px] px-8 py-8 gap-10">
+            <div className="flex w-full max-w-[1280px] px-4 py-4 md:px-8 md:py-8 gap-6 md:gap-10">
               
-              {/* Feed Column (780px) */}
               <div className="flex-1 max-w-[780px] min-w-0 flex flex-col gap-6">
                 
                 {/* Stories Row */}
@@ -223,7 +219,7 @@ export default function Home() {
                     }}
                   />
                   {stories.map((story) => (
-                    <StoryItem key={story.id} name={story.author} hasRing imgColor="bg-amber" onClick={() => setActiveStory(story)} />
+                    <StoryItem key={story.id} name={story.author} hasRing imageUrl={story.image_url} onClick={() => setActiveStory(story)} />
                   ))}
                 </div>
 
@@ -257,13 +253,24 @@ export default function Home() {
                         <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (!file) return;
-                          const body = new FormData();
-                          body.append("file", file);
-                          const res = await fetch("/api/upload", { method: "POST", body });
-                          const json = await res.json();
-                          if (!json.success) { showToast(json.error || "Sign in to upload a photo", "error"); return; }
-                          setPhotoUrl(json.data.url);
-                          setComposerAttachment(file.name);
+                          try {
+                            const compressed = await compressImageFile(file);
+                            const body = new FormData();
+                            body.append("file", compressed);
+                            const res = await fetch("/api/upload", { method: "POST", body });
+                            const json = await res.json();
+                            if (!json.success) { showToast(json.error || "Sign in to upload a photo", "error"); return; }
+                            setPhotoUrl(json.data.url);
+                            setComposerAttachment(compressed.name);
+                            const saved = json.data.bytesOut && json.data.bytesIn
+                              ? ` · ${Math.round((1 - json.data.bytesOut / json.data.bytesIn) * 100)}% smaller`
+                              : "";
+                            showToast(`Photo ready${saved}`);
+                          } catch {
+                            showToast("Could not process photo", "error");
+                          } finally {
+                            e.target.value = "";
+                          }
                         }} />
                       </label>
                       <button 
@@ -352,8 +359,7 @@ export default function Home() {
                 
               </div>
 
-              {/* Right Column (456px) */}
-              <div className="w-[456px] shrink-0 flex flex-col gap-6">
+              <div className="hidden xl:flex w-[456px] shrink-0 flex-col gap-6">
                 
                 {/* Explore USA */}
                 <RightCard 
@@ -472,10 +478,10 @@ export default function Home() {
               </div>
             </div>
             
-            {/* Floating Action Button */}
+            {/* Desktop FAB — mobile uses the bottom-nav + button */}
             <button 
-              onClick={() => document.getElementById("composer-input")?.focus()}
-              className="fixed bottom-8 right-8 w-14 h-14 bg-amber text-background rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all z-40"
+              onClick={focusComposer}
+              className="hidden md:flex fixed bottom-8 right-8 w-14 h-14 bg-amber text-background rounded-full items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all z-40"
               title="Compose post"
             >
               <Plus className="w-6 h-6" />
@@ -483,9 +489,7 @@ export default function Home() {
             
           </div>
         </div>
-      </div>
 
-      {/* Interactive Modals */}
       {activeStory && (
         <StoryViewerModal 
           isOpen={Boolean(activeStory)} 
@@ -522,18 +526,23 @@ export default function Home() {
           onClose={() => setActiveTripPlace(null)} 
         />
       )}
-    </div>
+    </AppShell>
   );
 }
 
 // Subcomponents
 
-function StoryItem({ add, name, hasRing, imgColor = 'bg-line', onClick }: { add?: boolean, name?: string, hasRing?: boolean, imgColor?: string, onClick?: () => void }) {
+function StoryItem({ add, name, hasRing, imgColor = 'bg-line', imageUrl, onClick }: { add?: boolean, name?: string, hasRing?: boolean, imgColor?: string, imageUrl?: string | null, onClick?: () => void }) {
   return (
     <div onClick={onClick} className="flex flex-col items-center gap-2 shrink-0 cursor-pointer hover:opacity-80 transition-opacity">
       <div className={`w-[68px] h-[68px] rounded-full flex items-center justify-center ${hasRing ? 'bg-gradient-to-tr from-amber to-amber/50 p-[2px]' : 'p-[2px] bg-transparent'}`}>
-        <div className={`w-full h-full rounded-full border-[3px] border-background ${add ? 'bg-card border-line border-dashed flex items-center justify-center' : imgColor}`}>
-          {add && <Plus className="w-6 h-6 text-muted" />}
+        <div className={`w-full h-full rounded-full border-[3px] border-background overflow-hidden ${add ? 'bg-card border-line border-dashed flex items-center justify-center' : imgColor}`}>
+          {add ? (
+            <Plus className="w-6 h-6 text-muted" />
+          ) : imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={imageUrl} alt="" className="w-full h-full object-cover" />
+          ) : null}
         </div>
       </div>
       <span className="text-xs font-medium text-white">{add ? 'Your story' : name}</span>

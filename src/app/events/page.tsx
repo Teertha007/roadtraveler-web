@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Sidebar from "@/components/Sidebar";
+import AppShell from "@/components/AppShell";
 import Navbar from "@/components/Navbar";
 import HostEventModal from "@/components/HostEventModal";
 import ShareModal from "@/components/ShareModal";
@@ -68,30 +68,28 @@ export default function EventsPage() {
   };
 
   return (
-    <div className="flex w-full h-screen overflow-hidden bg-background text-foreground">
-      <Sidebar />
+    <AppShell>
 
-      <div className="flex-1 flex flex-col min-w-0">
         <Navbar 
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
         />
 
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8">
           <div className="max-w-[1280px] mx-auto flex flex-col gap-8">
             
             {/* Header Banner */}
-            <div className="flex items-center justify-between bg-card border border-line rounded-3xl p-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card border border-line rounded-3xl p-5 md:p-8">
               <div>
                 <span className="text-amber text-xs font-bold uppercase tracking-widest">Traveler Gatherings</span>
-                <h1 className="text-3xl font-bold text-white mt-1">Upcoming Overland & RV Events</h1>
+                <h1 className="text-2xl md:text-3xl font-bold text-white mt-1">Upcoming Overland & RV Events</h1>
                 <p className="text-muted text-sm mt-1">
                   Connect with fellow road wanderers at upcoming rallies, trail runs, campfire talks, and swap meets.
                 </p>
               </div>
               <button 
                 onClick={() => setIsHostModalOpen(true)}
-                className="bg-amber text-background px-6 py-3 rounded-full text-xs font-bold hover:bg-amber/90 transition-all flex items-center gap-2 hover:scale-105 active:scale-95 shadow-md"
+                className="bg-amber text-background px-6 py-3 rounded-full text-xs font-bold hover:bg-amber/90 transition-all flex items-center justify-center gap-2 active:scale-95 shadow-md shrink-0 min-h-[44px]"
               >
                 <Plus className="w-4 h-4" /> Host an event
               </button>
@@ -174,7 +172,6 @@ export default function EventsPage() {
                       </div>
                     </div>
 
-                    {/* RSVP Buttons */}
                     <div className="flex items-center gap-3 w-full md:w-auto justify-end pt-4 md:pt-0 border-t md:border-t-0 border-line">
                       <button
                         onClick={() => handleRsvp(event.id, "going")}
@@ -211,7 +208,6 @@ export default function EventsPage() {
 
           </div>
         </div>
-      </div>
 
       {/* Modals */}
       <HostEventModal 
@@ -228,6 +224,6 @@ export default function EventsPage() {
           onClose={() => setShareEvent(null)}
         />
       )}
-    </div>
+    </AppShell>
   );
 }

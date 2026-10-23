@@ -2,8 +2,22 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import crypto from "crypto";
+import { assertDbReady, supabaseConfigured, useLocalDb } from "@/lib/env";
+import { sanitizePhotoUrls } from "@/lib/image";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
-// Keep the DB outside the Next project so Turbopack never watches it.
+/** CDN demo photos — short URL strings only (never image bytes in the DB). */
+const DEMO_IMG = {
+  horseshoe: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=960&q=70&auto=format&fit=crop",
+  moab: "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=960&q=70&auto=format&fit=crop",
+  desert: "https://images.unsplash.com/photo-1473580044384-7ba9967e16a0?w=960&q=70&auto=format&fit=crop",
+  beach: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=960&q=70&auto=format&fit=crop",
+  zion: "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=960&q=70&auto=format&fit=crop",
+  camp: "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=960&q=70&auto=format&fit=crop",
+  rv: "https://images.unsplash.com/photo-1523987355523-c7b5b0dd90a7?w=960&q=70&auto=format&fit=crop",
+} as const;
+
+// Keep the local DB outside the Next project so Turbopack never watches it.
 const FILE = path.join(process.env.LOCALAPPDATA || os.tmpdir(), "roadtraveler-web", "db.json");
 
 export type Profile = {
@@ -31,6 +45,7 @@ export type Place = {
   rating: number;
   reviews_count: number;
   travelers_count: number;
+  photo_url?: string | null;
 };
 
 export type PostRow = {
@@ -218,10 +233,12 @@ const BADGES: Badge[] = [
   { id: "member_2_years", label: "Founding Spirit", description: "Member for two years", icon: "beenhere", metric: "days", threshold: 730, group: "loyalty" },
 ];
 
-function seed(): DB {
+/** Local seed includes a known demo login; cloud seed uses an unguessable password. */
+function seed(opts?: { demoLogin?: boolean }): DB {
   const now = Date.now();
   const ago = (h: number) => new Date(now - h * 3600_000).toISOString();
-  const pw = hashPassword("roadtraveler");
+  const demoLogin = opts?.demoLogin !== false;
+  const pw = hashPassword(demoLogin ? "roadtraveler" : crypto.randomBytes(32).toString("hex"));
   const profiles: Profile[] = [
     { id: "u-teertha", username: "teertha", display_name: "Teertha", avatar_url: null, bio: "Building RoadTraveler.", location: "USA", points: 420, created_at: ago(24 * 40) },
     { id: "u-sarah", username: "sarah", display_name: "Sarah Adventures", avatar_url: null, bio: null, location: "Arizona", points: 1980, created_at: ago(24 * 200) },
@@ -231,21 +248,21 @@ function seed(): DB {
     { id: "u-family", username: "family", display_name: "Family Travel", avatar_url: null, bio: null, location: "Florida", points: 1120, created_at: ago(24 * 80) },
   ];
   const places: Place[] = [
-    { id: "p1", name: "Horseshoe Bend Overlook", slug: "horseshoe-bend", category: "attraction", description: "Sunrise overlook above the Colorado River.", location_name: "Page, AZ", state: "Arizona", lat: 36.8791, lng: -111.5105, amenities: ["parking", "restrooms", "wheelchair_accessible"], rating: 4.8, reviews_count: 1204, travelers_count: 4890 },
-    { id: "p2", name: "Sand Flats Recreation Area", slug: "sand-flats", category: "campground", description: "Slickrock camping outside Moab.", location_name: "Moab, UT", state: "Utah", lat: 38.5806, lng: -109.4975, amenities: ["pet_friendly", "free_entry", "restrooms", "trails"], rating: 4.7, reviews_count: 342, travelers_count: 1850 },
-    { id: "p3", name: "Red Mesa Rest Area", slug: "red-mesa", category: "rest_stop", description: "Highway rest stop with limited overnight space.", location_name: "I-70, UT", state: "Utah", lat: 38.9328, lng: -110.1654, amenities: ["parking"], rating: 2.1, reviews_count: 38, travelers_count: 512 },
-    { id: "p4", name: "Zion River Resort RV Park", slug: "zion-river-resort", category: "rv_park", description: "Full-hookup park near Zion.", location_name: "Virgin, UT", state: "Utah", lat: 37.2081, lng: -113.1899, amenities: ["rv_hookups", "showers", "potable_water", "pet_friendly", "restrooms"], rating: 4.9, reviews_count: 856, travelers_count: 3200 },
-    { id: "p5", name: "Pfeiffer Beach", slug: "pfeiffer-beach", category: "beach", description: "Big Sur beach with purple sand.", location_name: "Big Sur, CA", state: "California", lat: 36.2381, lng: -121.8153, amenities: ["parking", "restrooms", "trails"], rating: 4.6, reviews_count: 620, travelers_count: 2400 },
+    { id: "p1", name: "Horseshoe Bend Overlook", slug: "horseshoe-bend", category: "attraction", description: "Sunrise overlook above the Colorado River.", location_name: "Page, AZ", state: "Arizona", lat: 36.8791, lng: -111.5105, amenities: ["parking", "restrooms", "wheelchair_accessible"], rating: 4.8, reviews_count: 1204, travelers_count: 4890, photo_url: DEMO_IMG.horseshoe },
+    { id: "p2", name: "Sand Flats Recreation Area", slug: "sand-flats", category: "campground", description: "Slickrock camping outside Moab.", location_name: "Moab, UT", state: "Utah", lat: 38.5806, lng: -109.4975, amenities: ["pet_friendly", "free_entry", "restrooms", "trails"], rating: 4.7, reviews_count: 342, travelers_count: 1850, photo_url: DEMO_IMG.moab },
+    { id: "p3", name: "Red Mesa Rest Area", slug: "red-mesa", category: "rest_stop", description: "Highway rest stop with limited overnight space.", location_name: "I-70, UT", state: "Utah", lat: 38.9328, lng: -110.1654, amenities: ["parking"], rating: 2.1, reviews_count: 38, travelers_count: 512, photo_url: DEMO_IMG.desert },
+    { id: "p4", name: "Zion River Resort RV Park", slug: "zion-river-resort", category: "rv_park", description: "Full-hookup park near Zion.", location_name: "Virgin, UT", state: "Utah", lat: 37.2081, lng: -113.1899, amenities: ["rv_hookups", "showers", "potable_water", "pet_friendly", "restrooms"], rating: 4.9, reviews_count: 856, travelers_count: 3200, photo_url: DEMO_IMG.rv },
+    { id: "p5", name: "Pfeiffer Beach", slug: "pfeiffer-beach", category: "beach", description: "Big Sur beach with purple sand.", location_name: "Big Sur, CA", state: "California", lat: 36.2381, lng: -121.8153, amenities: ["parking", "restrooms", "trails"], rating: 4.6, reviews_count: 620, travelers_count: 2400, photo_url: DEMO_IMG.beach },
   ];
   return {
     profiles,
     passwords: [{ user_id: "u-teertha", ...pw }],
     places,
     posts: [
-      { id: "post-1", author_id: "u-sarah", title: "Sunrise at Horseshoe Bend was worth the 4am alarm", content: "Parked the van at the overlook lot ($10, opens at 5). Walk is 15 min on a paved path — easy with kids. Bring a wide lens, the bend barely fits.", tag: "#Arizona", is_recommended: true, place_id: "p1", likes_count: 248, comments_count: 2, photos: [], created_at: ago(2) },
-      { id: "post-2", author_id: "u-john", title: "Moab Overland Fest · Sat Oct 18 — rigs, trail runs, campfire talks", content: "Two-day gathering for off-roaders and RVers. Free camping on site, vendor row, guided Hell's Revenge run at 9am. 212 travelers are going.", tag: "#Event", is_recommended: null, place_id: "p2", likes_count: 96, comments_count: 0, photos: [], created_at: ago(5) },
-      { id: "post-3", author_id: "u-joe", title: "Skip this rest stop overnight — no shade, generators all night", content: "Lot was packed with semis by 8pm. No potable water, restrooms locked after 10. Drive 20 more minutes to the BLM pullout near Green River instead.", tag: "#RestStop", is_recommended: false, place_id: "p3", likes_count: 54, comments_count: 0, photos: [], created_at: ago(9) },
-      { id: "post-4", author_id: "u-family", title: "7 Florida beach campgrounds 10 feet from the water", content: "We spent the winter hopping between them. Here's which ones have hookups, which ones book out 11 months ahead, and the one nobody talks about.", tag: "#Guide", is_recommended: true, place_id: "p5", likes_count: 412, comments_count: 0, photos: [], created_at: ago(26) },
+      { id: "post-1", author_id: "u-sarah", title: "Sunrise at Horseshoe Bend was worth the 4am alarm", content: "Parked the van at the overlook lot ($10, opens at 5). Walk is 15 min on a paved path — easy with kids. Bring a wide lens, the bend barely fits.", tag: "#Arizona", is_recommended: true, place_id: "p1", likes_count: 248, comments_count: 2, photos: [DEMO_IMG.horseshoe], created_at: ago(2) },
+      { id: "post-2", author_id: "u-john", title: "Moab Overland Fest · Sat Oct 18 — rigs, trail runs, campfire talks", content: "Two-day gathering for off-roaders and RVers. Free camping on site, vendor row, guided Hell's Revenge run at 9am. 212 travelers are going.", tag: "#Event", is_recommended: null, place_id: "p2", likes_count: 96, comments_count: 0, photos: [DEMO_IMG.moab], created_at: ago(5) },
+      { id: "post-3", author_id: "u-joe", title: "Skip this rest stop overnight — no shade, generators all night", content: "Lot was packed with semis by 8pm. No potable water, restrooms locked after 10. Drive 20 more minutes to the BLM pullout near Green River instead.", tag: "#RestStop", is_recommended: false, place_id: "p3", likes_count: 54, comments_count: 0, photos: [DEMO_IMG.desert], created_at: ago(9) },
+      { id: "post-4", author_id: "u-family", title: "7 Florida beach campgrounds 10 feet from the water", content: "We spent the winter hopping between them. Here's which ones have hookups, which ones book out 11 months ahead, and the one nobody talks about.", tag: "#Guide", is_recommended: true, place_id: "p5", likes_count: 412, comments_count: 0, photos: [DEMO_IMG.beach], created_at: ago(26) },
     ],
     likes: [],
     comments: [
@@ -276,9 +293,9 @@ function seed(): DB {
       { user_id: "u-teertha", badge_id: "first_stop", is_showcased: true },
     ],
     stories: [
-      { id: "st1", user_id: "u-sarah", caption: "First light on the Colorado River.", image_url: null, created_at: ago(2) },
-      { id: "st2", user_id: "u-john", caption: "Hell's Revenge, then campfire.", image_url: null, created_at: ago(4) },
-      { id: "st3", user_id: "u-joe", caption: "Dispersed camp at 9,500 ft.", image_url: null, created_at: ago(6) },
+      { id: "st1", user_id: "u-sarah", caption: "First light on the Colorado River.", image_url: DEMO_IMG.horseshoe, created_at: ago(2) },
+      { id: "st2", user_id: "u-john", caption: "Hell's Revenge, then campfire.", image_url: DEMO_IMG.camp, created_at: ago(4) },
+      { id: "st3", user_id: "u-joe", caption: "Dispersed camp at 9,500 ft.", image_url: DEMO_IMG.zion, created_at: ago(6) },
     ],
     notifications: [
       { id: "n1", user_id: "u-teertha", text: "Sarah Adventures liked a post you follow", read: false, created_at: ago(1) },
@@ -297,8 +314,44 @@ function migrate(db: DB) {
   if (!db.notifications) { db.notifications = []; changed = true; }
   if (!db.bookmarks) { db.bookmarks = []; changed = true; }
   if (!db.guide_saves) { db.guide_saves = []; changed = true; }
+  const seedPhotos: Record<string, string> = {
+    "post-1": DEMO_IMG.horseshoe,
+    "post-2": DEMO_IMG.moab,
+    "post-3": DEMO_IMG.desert,
+    "post-4": DEMO_IMG.beach,
+  };
+  const placePhotos: Record<string, string> = {
+    p1: DEMO_IMG.horseshoe,
+    p2: DEMO_IMG.moab,
+    p3: DEMO_IMG.desert,
+    p4: DEMO_IMG.rv,
+    p5: DEMO_IMG.beach,
+  };
   for (const post of db.posts) {
     if (!post.photos) { post.photos = []; changed = true; }
+    if (post.photos.length === 0 && seedPhotos[post.id]) {
+      post.photos = [seedPhotos[post.id]];
+      changed = true;
+    }
+    // Strip accidental base64 blobs from older builds — keep DB small.
+    const cleaned = sanitizePhotoUrls(post.photos);
+    if (cleaned.length !== post.photos.length || cleaned.some((u, i) => u !== post.photos[i])) {
+      post.photos = cleaned.length ? cleaned : seedPhotos[post.id] ? [seedPhotos[post.id]] : [];
+      changed = true;
+    }
+  }
+  for (const place of db.places) {
+    if (!place.photo_url && placePhotos[place.id]) {
+      place.photo_url = placePhotos[place.id];
+      changed = true;
+    }
+  }
+  for (const story of db.stories || []) {
+    if (!story.image_url) {
+      if (story.id === "st1") { story.image_url = DEMO_IMG.horseshoe; changed = true; }
+      else if (story.id === "st2") { story.image_url = DEMO_IMG.camp; changed = true; }
+      else if (story.id === "st3") { story.image_url = DEMO_IMG.zion; changed = true; }
+    }
   }
   if (db.notifications.length === 0) {
     const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
@@ -320,7 +373,7 @@ function migrate(db: DB) {
   return changed;
 }
 
-function read(): { db: DB; changed: boolean } {
+function readLocal(): { db: DB; changed: boolean } {
   if (!fs.existsSync(FILE)) {
     const legacy = path.join(process.cwd(), ".data", "db.json");
     if (fs.existsSync(legacy)) {
@@ -338,18 +391,71 @@ function read(): { db: DB; changed: boolean } {
   return { db, changed };
 }
 
-function write(db: DB) {
+function writeLocal(db: DB) {
   fs.mkdirSync(path.dirname(FILE), { recursive: true });
   fs.writeFileSync(FILE, JSON.stringify(db, null, 2));
 }
 
+async function readCloud(): Promise<{ db: DB; changed: boolean; version: number }> {
+  const sb = getSupabaseAdmin();
+  if (!sb) throw new Error("Supabase is not configured.");
+  const { data, error } = await sb.from("app_state").select("data, version").eq("id", 1).maybeSingle();
+  if (error) throw new Error(`Database read failed: ${error.message}`);
+  if (!data?.data) {
+    // Never plant a public demo password into production cloud data.
+    const db = seed({ demoLogin: false });
+    const { error: insertError } = await sb.from("app_state").upsert({ id: 1, data: db, version: 1 });
+    if (insertError) throw new Error(`Database seed failed: ${insertError.message}`);
+    return { db, changed: false, version: 1 };
+  }
+  const db = data.data as DB;
+  const changed = migrate(db);
+  return { db, changed, version: data.version || 1 };
+}
+
+async function writeCloud(db: DB, version: number) {
+  const sb = getSupabaseAdmin();
+  if (!sb) throw new Error("Supabase is not configured.");
+  const nextVersion = version + 1;
+  const { data, error } = await sb
+    .from("app_state")
+    .update({ data: db, version: nextVersion })
+    .eq("id", 1)
+    .eq("version", version)
+    .select("version")
+    .maybeSingle();
+  if (error) throw new Error(`Database write failed: ${error.message}`);
+  if (!data) {
+    // Lost the race — retry once with latest
+    const latest = await readCloud();
+    const { error: retryError } = await sb
+      .from("app_state")
+      .update({ data: db, version: latest.version + 1 })
+      .eq("id", 1)
+      .eq("version", latest.version);
+    if (retryError) throw new Error(`Database write retry failed: ${retryError.message}`);
+  }
+}
+
 function withDb<T>(fn: (db: DB) => T): Promise<T> {
-  const run = queue.then(() => {
-    const { db, changed } = read();
+  const run = queue.then(async () => {
+    assertDbReady();
+    if (useLocalDb()) {
+      const { db, changed } = readLocal();
+      const before = JSON.stringify(db);
+      const result = fn(db);
+      const after = JSON.stringify(db);
+      if (changed || before !== after) writeLocal(db);
+      return result;
+    }
+    if (!supabaseConfigured()) {
+      throw new Error("Supabase is required for production. See DEPLOY.md.");
+    }
+    const { db, changed, version } = await readCloud();
     const before = JSON.stringify(db);
     const result = fn(db);
     const after = JSON.stringify(db);
-    if (changed || before !== after) write(db);
+    if (changed || before !== after) await writeCloud(db, version);
     return result;
   });
   queue = run.then(() => undefined, () => undefined);
@@ -484,6 +590,7 @@ export const store = {
   },
 
   async createPost(userId: string, input: { title?: string; text: string; tag?: string; place_id?: string | null; is_recommended?: boolean | null; photos?: string[] }) {
+    const photos = sanitizePhotoUrls(input.photos);
     return withDb((db) => {
       const user = profile(db, userId);
       if (!user) throw new Error("Sign in required.");
@@ -497,7 +604,7 @@ export const store = {
         place_id: input.place_id || null,
         likes_count: 0,
         comments_count: 0,
-        photos: input.photos || [],
+        photos,
         created_at: new Date().toISOString(),
       };
       db.posts.unshift(post);
@@ -769,7 +876,8 @@ export const store = {
     return withDb((db) => {
       const user = profile(db, userId);
       if (!user) throw new Error("Sign in required.");
-      const story: StoryRow = { id: id(), user_id: userId, caption: input.caption.trim(), image_url: input.image_url || null, created_at: new Date().toISOString() };
+      const imageUrl = sanitizePhotoUrls(input.image_url ? [input.image_url] : [])[0] || null;
+      const story: StoryRow = { id: id(), user_id: userId, caption: input.caption.trim(), image_url: imageUrl, created_at: new Date().toISOString() };
       db.stories.unshift(story);
       return { ...story, author: user.display_name, time: "Just now" };
     });

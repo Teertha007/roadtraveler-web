@@ -52,7 +52,7 @@ export default function StoryViewerModal({ isOpen, onClose, story }: StoryViewer
   return (
     <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
       <div 
-        className="relative max-w-sm w-full h-[640px] bg-gradient-to-b from-[#141C33] to-[#0C1222] border border-line rounded-3xl overflow-hidden shadow-2xl flex flex-col justify-between p-5"
+        className="relative max-w-sm w-full h-[min(640px,90dvh)] bg-gradient-to-b from-[#141C33] to-[#0C1222] border border-line rounded-3xl overflow-hidden shadow-2xl flex flex-col justify-between p-5"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top Progress Bar */}
@@ -80,14 +80,18 @@ export default function StoryViewerModal({ isOpen, onClose, story }: StoryViewer
           </div>
         </div>
 
-        {/* Center Content Placeholder */}
-        <div className="my-auto bg-line/40 rounded-2xl p-6 text-center border border-line/60">
-          <p className="text-sm font-medium text-white leading-relaxed">
-            "{view.text}"
-          </p>
-          <span className="text-[11px] text-amber mt-3 inline-block font-semibold">
-            📍 Captured live on RoadTraveler
-          </span>
+        <div className="my-auto relative rounded-2xl overflow-hidden border border-line/60 min-h-[280px] flex items-end">
+          {view.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={view.image} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          ) : (
+            <div className="absolute inset-0 bg-line/40" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+          <div className="relative z-10 p-5 w-full">
+            <p className="text-sm font-medium text-white leading-relaxed">"{view.text}"</p>
+            <span className="text-[11px] text-amber mt-2 inline-block font-semibold">📍 On the road</span>
+          </div>
         </div>
 
         {/* Bottom Reply Input */}

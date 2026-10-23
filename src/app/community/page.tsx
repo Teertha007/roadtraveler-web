@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Sidebar from "@/components/Sidebar";
+import AppShell from "@/components/AppShell";
 import Navbar from "@/components/Navbar";
 import { 
   Users, MessageSquare, ThumbsUp, Award, Star, Compass, 
@@ -67,16 +67,14 @@ export default function CommunityPage() {
   }, []);
 
   return (
-    <div className="flex w-full h-screen overflow-hidden bg-background text-foreground">
-      <Sidebar />
+    <AppShell>
 
-      <div className="flex-1 flex flex-col min-w-0">
         <Navbar 
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
         />
 
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8">
           <div className="max-w-[1280px] mx-auto flex flex-col gap-8">
             
             {/* Community Hero Header */}
@@ -238,11 +236,9 @@ export default function CommunityPage() {
 
               </div>
 
-            </div>
-
           </div>
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 }

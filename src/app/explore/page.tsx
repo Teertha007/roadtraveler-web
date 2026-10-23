@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Sidebar from "@/components/Sidebar";
+import AppShell from "@/components/AppShell";
 import Navbar from "@/components/Navbar";
 import AddToTripModal from "@/components/AddToTripModal";
 import ReviewModal from "@/components/ReviewModal";
@@ -78,25 +78,22 @@ export default function ExplorePage() {
   ];
 
   return (
-    <div className="flex w-full h-screen overflow-hidden bg-background text-foreground">
-      <Sidebar />
-
-      <div className="flex-1 flex flex-col min-w-0">
+    <AppShell>
         <Navbar 
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
         />
 
-        <div className="flex-1 overflow-y-auto p-8">
-          <div className="max-w-[1280px] mx-auto flex flex-col gap-8">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8">
+          <div className="max-w-[1280px] mx-auto flex flex-col gap-6 md:gap-8">
             
             {/* Explore Hero Banner */}
-            <div className="bg-gradient-to-r from-card via-[#1A233F] to-card border border-line rounded-3xl p-8 relative overflow-hidden flex flex-col justify-between">
+            <div className="bg-gradient-to-r from-card via-[#1A233F] to-card border border-line rounded-3xl p-5 md:p-8 relative overflow-hidden flex flex-col justify-between">
               <div className="absolute right-0 top-0 w-96 h-96 bg-amber/10 rounded-full blur-3xl pointer-events-none"></div>
               
               <div className="max-w-[650px] z-10">
                 <span className="text-amber text-xs font-bold uppercase tracking-widest">Directory & Discovery</span>
-                <h1 className="text-3xl font-bold text-white mt-1 mb-2">Explore 10,000+ Verified Roadside Places</h1>
+                <h1 className="text-2xl md:text-3xl font-bold text-white mt-1 mb-2">Explore 10,000+ Verified Roadside Places</h1>
                 <p className="text-muted text-sm leading-relaxed">
                   Discover campgrounds, RV parks, scenic overlooks, BLM dispersed camping, and rest stops reviewed by travelers across the USA.
                 </p>
@@ -173,8 +170,11 @@ export default function ExplorePage() {
               {places.map((place) => (
                 <div key={place.id} className="bg-card border border-line rounded-2xl p-5 flex flex-col justify-between hover:border-amber/50 transition-all hover:shadow-xl group">
                   <div>
-                    {/* Image Placeholder with category badge */}
                     <div className="aspect-[16/9] bg-line rounded-xl mb-4 relative overflow-hidden flex items-end p-4">
+                      {place.photo_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={place.photo_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                      ) : null}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
                       <span className="absolute top-3 left-3 bg-amber text-background px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider">
                         {place.category.replace("_", " ")}
@@ -256,7 +256,6 @@ export default function ExplorePage() {
 
           </div>
         </div>
-      </div>
 
       {/* Modals */}
       {activeTripPlace && (
@@ -278,6 +277,6 @@ export default function ExplorePage() {
           onClose={() => setActiveClaimPlace(null)} 
         />
       )}
-    </div>
+    </AppShell>
   );
 }

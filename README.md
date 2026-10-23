@@ -1,36 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RoadTraveler Web
 
-## Getting Started
+USA roadside discovery / camping / RVing travel social app — **Next.js 16.4.3 (App Router)** + optional **Supabase**.
 
-First, run the development server:
+## Production vs local
+
+| Mode | When | Storage |
+|---|---|---|
+| **Local JSON** | `ALLOW_LOCAL_DB=1` and no Supabase keys (dev only) | `%LOCALAPPDATA%/roadtraveler-web/db.json` |
+| **Supabase** | URL + service role key set (required on Vercel) | `app_state` JSONB row + `uploads` Storage bucket |
+
+Vercel refuses to boot without Supabase (`src/lib/env.ts`). Uploads go to Storage when configured, otherwise a data-URL fallback.
+
+## Local development
 
 ```bash
+npm i
+cp .env.example .env.local
+# Keep ALLOW_LOCAL_DB=1 for the local JSON DB (or fill in Supabase keys)
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**Demo login:** `teertha` / `roadtraveler`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Useful scripts:
 
-## Learn More
+```bash
+npm run typecheck   # tsc --noEmit
+npm run build
+npm start
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Production (Supabase + Vercel)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 1. Create a free Supabase project
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Sign up at [supabase.com](https://supabase.com) and create a project.
+2. In **SQL Editor**, run in order:
+   - `supabase/schema.sql`
+   - `supabase/seed.sql`
+3. From **Project Settings → API**, copy:
+   - Project URL → `NEXT_PUBLIC_SUPABASE_URL`
+   - `anon` `public` key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `service_role` key → `SUPABASE_SERVICE_ROLE_KEY` (server only; never expose to the client)
 
-## Deploy on Vercel
+### 2. Set env on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Variable | Notes |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Required |
+| `SUPABASE_SERVICE_ROLE_KEY` | Required (server only) |
+| `SESSION_SECRET` | Required (signed cookies; min 16 chars) |
+| `NEXT_PUBLIC_APP_URL` | Your Vercel URL, e.g. `https://your-app.vercel.app` |
+| `ALLOW_LOCAL_DB` | **Do not set** on Vercel |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See `.env.example` and `DEPLOY.md`. Production has no public demo password — use Sign up.
+
+### 3. Deploy
+
+```bash
+npx vercel --prod
+```
+
+Or connect the GitHub repo in the Vercel dashboard and redeploy after env is set.
+
+Short checklist: **[DEPLOY.md](./DEPLOY.md)**.
+
+## Stack
+
+- Next.js 16 / React 19 / TypeScript / Tailwind CSS v4
+- `@supabase/supabase-js` (when configured)
+- Leaflet / Google Maps loaders for map views

@@ -22,7 +22,7 @@ export default function Sidebar({ onAddPostClick }: { onAddPostClick?: () => voi
   ];
 
   return (
-    <aside className="w-[92px] shrink-0 border-r border-line flex flex-col items-center py-6 gap-6 bg-background z-30 h-screen sticky top-0">
+    <aside className="hidden md:flex w-[92px] shrink-0 border-r border-line flex-col items-center py-6 gap-6 bg-background z-30 h-screen sticky top-0">
       {/* Brand Logo */}
       <Link 
         href="/"

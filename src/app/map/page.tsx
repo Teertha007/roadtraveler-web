@@ -2,16 +2,21 @@
 
 import React, { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
-import Sidebar from "@/components/Sidebar";
+import AppShell from "@/components/AppShell";
 import Navbar from "@/components/Navbar";
 
 const LeafletMap = dynamic(() => import("@/components/LeafletMap"), { ssr: false });
+const MapboxMap = dynamic(() => import("@/components/MapboxMap"), { ssr: false });
+const GoogleMapView = dynamic(() => import("@/components/GoogleMapView"), { ssr: false });
 import AddToTripModal from "@/components/AddToTripModal";
 import { useToast } from "@/context/ToastContext";
 import { 
   MapPin, Tent, Caravan, Trees, Heart, Compass, Star, Navigation, 
   Phone, Globe, Check, Plus, Layers, Filter, Search, X, ExternalLink
 } from "lucide-react";
+
+const useGoogleMaps = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY);
+const useMapbox = Boolean(process.env.NEXT_PUBLIC_MAPBOX_TOKEN) && !useGoogleMaps;
 
 export default function MapPage() {
   const { showToast } = useToast();
@@ -66,10 +71,8 @@ export default function MapPage() {
   };
 
   return (
-    <div className="flex w-full h-screen overflow-hidden bg-background text-foreground">
-      <Sidebar />
+    <AppShell>
 
-      <div className="flex-1 flex flex-col min-w-0">
         <Navbar 
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
@@ -167,13 +170,30 @@ export default function MapPage() {
             </div>
           </div>
 
-          {/* Real Google Maps Area */}
-          <div className="flex-1 relative h-full">
-            <LeafletMap
-              places={places}
-              selectedPlace={selectedPlace}
-              onSelectPlace={(place) => setSelectedPlace(place)}
-            />
+          {/* Priority: Google key → Mapbox token → free Leaflet/OSM */}
+          <div className="flex-1 relative h-full min-h-[40vh]">
+            {useGoogleMaps ? (
+              <GoogleMapView
+                places={places}
+                selectedPlace={selectedPlace}
+                onSelectPlace={(place) => setSelectedPlace(place)}
+                nearMeActive={nearMeActive}
+              />
+            ) : useMapbox ? (
+              <MapboxMap
+                places={places}
+                selectedPlace={selectedPlace}
+                onSelectPlace={(place) => setSelectedPlace(place)}
+                nearMeActive={nearMeActive}
+                userCoords={coords}
+              />
+            ) : (
+              <LeafletMap
+                places={places}
+                selectedPlace={selectedPlace}
+                onSelectPlace={(place) => setSelectedPlace(place)}
+              />
+            )}
 
             {/* Selected Place Overlay Card */}
             {selectedPlace && (
@@ -236,7 +256,6 @@ export default function MapPage() {
           </div>
 
         </div>
-      </div>
 
       {/* Add to Trip Modal */}
       {selectedPlace && (
@@ -247,6 +266,6 @@ export default function MapPage() {
           onClose={() => setIsTripModalOpen(false)}
         />
       )}
-    </div>
+    </AppShell>
   );
 }

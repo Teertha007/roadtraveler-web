@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Sidebar from "@/components/Sidebar";
+import AppShell from "@/components/AppShell";
 import Navbar from "@/components/Navbar";
 import GuideReaderModal from "@/components/GuideReaderModal";
 import { useToast } from "@/context/ToastContext";
@@ -92,16 +92,14 @@ export default function GuidesPage() {
   });
 
   return (
-    <div className="flex w-full h-screen overflow-hidden bg-background text-foreground">
-      <Sidebar />
+    <AppShell>
 
-      <div className="flex-1 flex flex-col min-w-0">
         <Navbar 
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
         />
 
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8">
           <div className="max-w-[1280px] mx-auto flex flex-col gap-8">
             
             {/* Hero Header */}
@@ -269,7 +267,6 @@ export default function GuidesPage() {
 
           </div>
         </div>
-      </div>
 
       {/* Guide Reading Modal */}
       {readingGuide && (
@@ -279,6 +276,6 @@ export default function GuidesPage() {
           onClose={() => setReadingGuide(null)} 
         />
       )}
-    </div>
+    </AppShell>
   );
 }
