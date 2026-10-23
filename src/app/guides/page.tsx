@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
 import GuideReaderModal from "@/components/GuideReaderModal";
@@ -65,14 +65,24 @@ export default function GuidesPage() {
     },
   ];
 
-  const toggleSave = (id: number) => {
-    if (savedGuides.includes(id)) {
-      setSavedGuides(savedGuides.filter(g => g !== id));
-      showToast("Removed from bookmarks", "info");
-    } else {
-      setSavedGuides([...savedGuides, id]);
-      showToast("Guide bookmarked to your reading list!");
+  useEffect(() => {
+    fetch("/api/guides").then((r) => r.json()).then((json) => {
+      if (json.success) setSavedGuides(json.data.map((id: string) => Number(id)));
+    }).catch(() => undefined);
+  }, []);
+
+  const toggleSave = async (id: number) => {
+    const res = await fetch("/api/guides", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ guide_id: String(id) }),
+    });
+    const json = await res.json();
+    if (!json.success) {
+      showToast(json.error || "Sign in to save a guide", "error");
+      return;
     }
+    setSavedGuides(json.data.saved ? [...savedGuides, id] : savedGuides.filter((g) => g !== id));
   };
 
   const filteredGuides = guides.filter(g => {

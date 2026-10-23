@@ -31,7 +31,6 @@ export default function Home() {
   const [isPosting, setIsPosting] = useState(false);
 
   // Modals state
-  const [activeStoryUser, setActiveStoryUser] = useState<string | null>(null);
   const [activeCommentPost, setActiveCommentPost] = useState<any | null>(null);
   const [activeSharePost, setActiveSharePost] = useState<any | null>(null);
   const [activeTripPlace, setActiveTripPlace] = useState<any | null>(null);
@@ -40,6 +39,12 @@ export default function Home() {
   const [feedPosts, setFeedPosts] = useState<any[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [events, setEvents] = useState<any[]>([]);
+  const [stories, setStories] = useState<any[]>([]);
+  const [activeStory, setActiveStory] = useState<any | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [placeId, setPlaceId] = useState<string | null>(null);
+  const [placeChoices, setPlaceChoices] = useState<any[]>([]);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   // Fetch posts from Backend API
   const fetchPosts = async () => {
@@ -48,6 +53,10 @@ export default function Home() {
       const params = new URLSearchParams();
       if (searchQuery) params.append("search", searchQuery);
       if (activeFilters.length > 0) params.append("tag", activeFilters[0]);
+      if (nearMeActive && coords) {
+        params.append("lat", String(coords.lat));
+        params.append("lng", String(coords.lng));
+      }
 
       const res = await fetch(`/api/posts?${params.toString()}`);
       const json = await res.json();
@@ -76,6 +85,8 @@ export default function Home() {
       }
     }
     loadSidebarData();
+    fetch("/api/stories").then((r) => r.json()).then((json) => { if (json.success) setStories(json.data); }).catch(() => undefined);
+    fetch("/api/places").then((r) => r.json()).then((json) => { if (json.success) setPlaceChoices(json.data); }).catch(() => undefined);
   }, []);
 
   // Re-fetch posts when filters or search query changes
@@ -84,7 +95,7 @@ export default function Home() {
       fetchPosts();
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery, activeFilters]);
+  }, [searchQuery, activeFilters, nearMeActive, coords]);
 
   // Logic to toggle filter chips
   const toggleFilter = (label: string) => {
@@ -111,7 +122,9 @@ export default function Home() {
           location: nearMeActive ? "Near Current Location" : "On the road",
           title: postText.slice(0, 45) + (postText.length > 45 ? "..." : ""),
           text: postText + (composerAttachment ? `\n[Attached: ${composerAttachment}]` : ""),
-          tag: composerTag
+          tag: composerTag,
+          place_id: placeId,
+          photos: photoUrl ? [photoUrl] : [],
         }),
       });
       const json = await res.json();
@@ -124,6 +137,8 @@ export default function Home() {
         setFeedPosts([json.data, ...feedPosts]);
         setPostText("");
         setComposerAttachment(null);
+        setPhotoUrl(null);
+        setPlaceId(null);
         showToast("Posted to the community feed");
       } else {
         showToast(json.error || "Could not publish post", "error");
@@ -142,8 +157,9 @@ export default function Home() {
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           async (pos) => {
+            setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
             setNearMeActive(true);
-            showToast("GPS Active: Filtering within 50 miles");
+            showToast("Showing posts from places within 50 miles");
             try {
               const res = await fetch(`/api/events?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}&radius=50`);
               const json = await res.json();
@@ -194,20 +210,21 @@ export default function Home() {
                 
                 {/* Stories Row */}
                 <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar items-center">
-                  <StoryItem 
-                    add 
-                    onClick={() => {
-                      showToast("Click 'Photo' or 'New post' to publish a story to your profile!");
-                      document.getElementById("composer-input")?.focus();
-                    }} 
+                  <StoryItem
+                    add
+                    onClick={async () => {
+                      const caption = window.prompt("Story caption");
+                      if (!caption) return;
+                      const res = await fetch("/api/stories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caption, image_url: photoUrl }) });
+                      const json = await res.json();
+                      if (!json.success) { showToast(json.error || "Sign in to add a story", "error"); return; }
+                      setStories([json.data, ...stories]);
+                      showToast("Story published");
+                    }}
                   />
-                  <StoryItem name="Sarah" hasRing imgColor="bg-[#10B981]" onClick={() => setActiveStoryUser("Sarah")} />
-                  <StoryItem name="JohnRV" hasRing imgColor="bg-[#5271FF]" onClick={() => setActiveStoryUser("JohnRV")} />
-                  <StoryItem name="OffRoad Joe" imgColor="bg-[#F43F5E]" onClick={() => setActiveStoryUser("OffRoad Joe")} />
-                  <StoryItem name="Family Tra..." imgColor="bg-[#EAB308]" onClick={() => setActiveStoryUser("Sarah")} />
-                  <StoryItem name="Mike" imgColor="bg-[#3B82F6]" onClick={() => setActiveStoryUser("JohnRV")} />
-                  <StoryItem name="Camp Cook" imgColor="bg-[#F97316]" onClick={() => setActiveStoryUser("OffRoad Joe")} />
-                  <StoryItem name="Trailer Li..." imgColor="bg-[#8B5CF6]" onClick={() => setActiveStoryUser("Sarah")} />
+                  {stories.map((story) => (
+                    <StoryItem key={story.id} name={story.author} hasRing imgColor="bg-amber" onClick={() => setActiveStory(story)} />
+                  ))}
                 </div>
 
                 {/* Composer */}
@@ -235,19 +252,27 @@ export default function Home() {
 
                   <div className="flex items-center justify-between ml-13">
                     <div className="flex gap-4 text-xs text-muted">
-                      <button 
-                        onClick={() => {
-                          setComposerAttachment("photo_overlook_4k.jpg");
-                          showToast("Photo attached to post!");
-                        }}
-                        className="flex items-center gap-1.5 hover:text-white transition-colors"
-                      >
+                      <label className="flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer">
                         <ImageIcon className="w-4 h-4 text-amber"/> Photo
-                      </button>
+                        <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const body = new FormData();
+                          body.append("file", file);
+                          const res = await fetch("/api/upload", { method: "POST", body });
+                          const json = await res.json();
+                          if (!json.success) { showToast(json.error || "Sign in to upload a photo", "error"); return; }
+                          setPhotoUrl(json.data.url);
+                          setComposerAttachment(file.name);
+                        }} />
+                      </label>
                       <button 
                         onClick={() => {
-                          setComposerAttachment("Horseshoe Bend Overlook, AZ");
-                          showToast("Location tagged: Horseshoe Bend Overlook");
+                          if (!placeChoices.length) return;
+                          const current = placeChoices.findIndex((p) => p.id === placeId);
+                          const next = placeChoices[(current + 1) % placeChoices.length];
+                          setPlaceId(next.id);
+                          setComposerAttachment(next.name);
                         }}
                         className="flex items-center gap-1.5 hover:text-white transition-colors"
                       >
@@ -304,11 +329,12 @@ export default function Home() {
                       onShareClick={() => setActiveSharePost(post)}
                       onAddToTripClick={() => setActiveTripPlace({ name: post.location || post.title, location: post.location, placeId: post.place_id })}
                     >
-                      {post.imageText && (
+                      {post.photos?.[0] ? (
+                        <img src={post.photos[0]} alt="" className="aspect-[16/9] w-full object-cover rounded-xl mt-4" />
+                      ) : post.imageText && (
                         <div className="aspect-[16/9] bg-line rounded-xl mt-4 relative overflow-hidden flex items-end p-4">
                           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
                           <span className="text-white text-xs z-10 font-medium">{post.imageText}</span>
-                          {!post.isBad && <span className="absolute top-4 right-4 bg-black/60 text-white text-xs px-2 py-1 rounded-md z-10 backdrop-blur-sm">1 / 4</span>}
                         </div>
                       )}
                       {post.isEvent && (
@@ -460,11 +486,11 @@ export default function Home() {
       </div>
 
       {/* Interactive Modals */}
-      {activeStoryUser && (
+      {activeStory && (
         <StoryViewerModal 
-          isOpen={Boolean(activeStoryUser)} 
-          storyUser={activeStoryUser} 
-          onClose={() => setActiveStoryUser(null)} 
+          isOpen={Boolean(activeStory)} 
+          story={activeStory}
+          onClose={() => setActiveStory(null)} 
         />
       )}
 
@@ -517,12 +543,12 @@ function StoryItem({ add, name, hasRing, imgColor = 'bg-line', onClick }: { add?
 
 function FeedPost({ 
   id, author, time, location, title, text, tag, isBad, likes: initialLikes, comments, avatarColor, avatarInitial, children, actionButton,
-  liked_by_me, onHashtagClick, onCommentClick, onShareClick, onAddToTripClick
+  liked_by_me, saved_by_me, onHashtagClick, onCommentClick, onShareClick, onAddToTripClick
 }: any) {
   const { showToast } = useToast();
   const router = useRouter();
   const [liked, setLiked] = useState(!!liked_by_me);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(!!saved_by_me);
   const [added, setAdded] = useState(false);
   const [likesCount, setLikesCount] = useState(initialLikes || 0);
 
@@ -540,10 +566,19 @@ function FeedPost({
     }
   };
 
-  const handleSaveToggle = () => {
-    const nextSaved = !saved;
-    setSaved(nextSaved);
-    showToast(nextSaved ? "Post saved to your bookmarks!" : "Bookmark removed");
+  const handleSaveToggle = async () => {
+    const res = await fetch("/api/bookmarks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ post_id: id }),
+    });
+    const json = await res.json();
+    if (!json.success) {
+      showToast(json.error || "Sign in to save posts", "error");
+      return;
+    }
+    setSaved(json.data.saved);
+    showToast(json.data.saved ? "Saved" : "Removed from saved", "info");
   };
 
   const handleAction = () => {

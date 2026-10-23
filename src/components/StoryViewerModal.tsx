@@ -7,39 +7,20 @@ import { useToast } from "@/context/ToastContext";
 interface StoryViewerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  storyUser?: string;
+  story?: { author: string; caption: string; time: string; image_url?: string | null };
 }
 
-export default function StoryViewerModal({ isOpen, onClose, storyUser = "Sarah" }: StoryViewerModalProps) {
+export default function StoryViewerModal({ isOpen, onClose, story }: StoryViewerModalProps) {
   const { showToast } = useToast();
   const [progress, setProgress] = useState(0);
   const [replyText, setReplyText] = useState("");
-
-  const storiesData: Record<string, any> = {
-    Sarah: {
-      name: "Sarah Adventures",
-      location: "Horseshoe Bend Overlook, AZ",
-      time: "2h ago",
-      text: "Caught the first light hitting the Colorado River. Cold morning but totally worth the hike!",
-      avatarColor: "bg-[#10B981]",
-    },
-    JohnRV: {
-      name: "JohnRV",
-      location: "Moab Slickrock Trail, UT",
-      time: "4h ago",
-      text: "Rig handled Hell's Revenge like a champ. Setting up campfire for the evening talk.",
-      avatarColor: "bg-[#5271FF]",
-    },
-    "OffRoad Joe": {
-      name: "OffRoad Joe",
-      location: "San Juan National Forest, CO",
-      time: "6h ago",
-      text: "Dispersed campsite at 9,500 ft elevation. Fall colors are peaking right now.",
-      avatarColor: "bg-[#F43F5E]",
-    },
+  const view = {
+    name: story?.author || "Traveler",
+    text: story?.caption || "",
+    time: story?.time || "",
+    image: story?.image_url || "",
+    avatarColor: "bg-amber",
   };
-
-  const story = storiesData[storyUser] || storiesData.Sarah;
 
   useEffect(() => {
     if (!isOpen) {
@@ -63,7 +44,7 @@ export default function StoryViewerModal({ isOpen, onClose, storyUser = "Sarah" 
 
   const handleSendReply = () => {
     if (!replyText.trim()) return;
-    showToast(`Reply sent to ${story.name}!`);
+    showToast(`Reply noted for ${view.name}`);
     setReplyText("");
     onClose();
   };
@@ -83,13 +64,13 @@ export default function StoryViewerModal({ isOpen, onClose, storyUser = "Sarah" 
           {/* User Info Bar */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-full ${story.avatarColor} flex items-center justify-center font-bold text-white text-sm`}>
-                {story.name[0]}
+              <div className={`w-10 h-10 rounded-full ${view.avatarColor} flex items-center justify-center font-bold text-white text-sm`}>
+                {view.name[0]}
               </div>
               <div>
-                <h4 className="font-bold text-sm text-white">{story.name}</h4>
+                <h4 className="font-bold text-sm text-white">{view.name}</h4>
                 <p className="text-[11px] text-muted flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-amber" /> {story.location} · {story.time}
+                  <MapPin className="w-3 h-3 text-amber" /> {view.time}
                 </p>
               </div>
             </div>
@@ -102,7 +83,7 @@ export default function StoryViewerModal({ isOpen, onClose, storyUser = "Sarah" 
         {/* Center Content Placeholder */}
         <div className="my-auto bg-line/40 rounded-2xl p-6 text-center border border-line/60">
           <p className="text-sm font-medium text-white leading-relaxed">
-            "{story.text}"
+            "{view.text}"
           </p>
           <span className="text-[11px] text-amber mt-3 inline-block font-semibold">
             📍 Captured live on RoadTraveler
@@ -116,7 +97,7 @@ export default function StoryViewerModal({ isOpen, onClose, storyUser = "Sarah" 
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSendReply()}
-            placeholder={`Reply to ${story.name}...`}
+            placeholder={`Reply to ${view.name}...`}
             className="flex-1 bg-background/80 border border-line rounded-full px-4 py-2.5 text-xs text-white placeholder:text-muted focus:outline-none focus:border-amber"
           />
           <button

@@ -6,9 +6,14 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = await getUserId();
+    const lat = searchParams.get("lat");
+    const lng = searchParams.get("lng");
     const posts = await store.getPosts(userId, {
       tag: searchParams.get("tag") || undefined,
       search: searchParams.get("search") || undefined,
+      lat: lat ? parseFloat(lat) : undefined,
+      lng: lng ? parseFloat(lng) : undefined,
+      radius: searchParams.get("radius") ? parseFloat(searchParams.get("radius")!) : 50,
     });
     return ok(posts);
   } catch (error) {
@@ -28,6 +33,7 @@ export async function POST(request: Request) {
       tag: body.tag,
       place_id: body.place_id,
       is_recommended: body.is_recommended,
+      photos: Array.isArray(body.photos) ? body.photos : [],
     });
     return ok(post, 201);
   } catch (error) {

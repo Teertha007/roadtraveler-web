@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Bell, Heart, Calendar, Award, Check, MessageSquare, X } from "lucide-react";
 import { useToast } from "@/context/ToastContext";
 
@@ -11,39 +11,16 @@ interface NotificationsPopoverProps {
 
 export default function NotificationsPopover({ isOpen, onClose }: NotificationsPopoverProps) {
   const { showToast } = useToast();
+  const [notifications, setNotifications] = useState<{ id: string; text: string; time: string; read: boolean }[]>([]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    fetch("/api/notifications").then((r) => r.json()).then((json) => {
+      if (json.success) setNotifications(json.data);
+    }).catch(() => setNotifications([]));
+  }, [isOpen]);
 
   if (!isOpen) return null;
-
-  const notifications = [
-    {
-      id: 1,
-      icon: <Heart className="w-4 h-4 text-red-400" />,
-      text: "Sarah Adventures liked your post about Horseshoe Bend",
-      time: "15m ago",
-      unread: true,
-    },
-    {
-      id: 2,
-      icon: <Award className="w-4 h-4 text-amber" />,
-      text: "You unlocked the 'Explorer' badge! (Reviewed 3 places)",
-      time: "2h ago",
-      unread: true,
-    },
-    {
-      id: 3,
-      icon: <Calendar className="w-4 h-4 text-[#10B981]" />,
-      text: "Reminder: Moab Overland Fest starts this Saturday",
-      time: "1d ago",
-      unread: false,
-    },
-    {
-      id: 4,
-      icon: <MessageSquare className="w-4 h-4 text-blue-400" />,
-      text: "JohnRV replied to your question in the Community Forum",
-      time: "2d ago",
-      unread: false,
-    },
-  ];
 
   return (
     <div 
@@ -56,9 +33,10 @@ export default function NotificationsPopover({ isOpen, onClose }: NotificationsP
           <h4 className="font-bold text-sm text-white">Notifications</h4>
         </div>
         <button 
-          onClick={() => {
-            showToast("All notifications marked as read!");
-            onClose();
+          onClick={async () => {
+            await fetch("/api/notifications", { method: "POST" });
+            setNotifications(notifications.map((n) => ({ ...n, read: true })));
+            showToast("Marked as read");
           }}
           className="text-[11px] text-amber hover:underline font-medium"
         >
@@ -71,17 +49,17 @@ export default function NotificationsPopover({ isOpen, onClose }: NotificationsP
           <div 
             key={n.id}
             className={`p-3.5 flex items-start gap-3 hover:bg-line/40 transition-colors cursor-pointer ${
-              n.unread ? "bg-amber/5" : ""
+              !n.read ? "bg-amber/5" : ""
             }`}
           >
             <div className="p-2 rounded-xl bg-background border border-line shrink-0 mt-0.5">
-              {n.icon}
+              <Bell className="w-4 h-4 text-amber" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs text-white leading-relaxed">{n.text}</p>
               <span className="text-[10px] text-muted mt-1 block">{n.time}</span>
             </div>
-            {n.unread && <span className="w-2 h-2 rounded-full bg-amber shrink-0 mt-2"></span>}
+            {!n.read && <span className="w-2 h-2 rounded-full bg-amber shrink-0 mt-2"></span>}
           </div>
         ))}
       </div>

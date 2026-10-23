@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
 import AddToTripModal from "@/components/AddToTripModal";
+import ReviewModal from "@/components/ReviewModal";
 import ClaimListingModal from "@/components/ClaimListingModal";
 import { useToast } from "@/context/ToastContext";
 import { 
@@ -23,6 +24,7 @@ export default function ExplorePage() {
   // Modals
   const [activeTripPlace, setActiveTripPlace] = useState<any | null>(null);
   const [activeClaimPlace, setActiveClaimPlace] = useState<string | null>(null);
+  const [reviewPlace, setReviewPlace] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     async function loadPlaces() {
@@ -214,12 +216,20 @@ export default function ExplorePage() {
                     <span className="text-xs text-muted font-medium">
                       {place.reviews_count} reviews · {place.travelers_count} visits
                     </span>
-                    <button 
-                      onClick={() => setActiveTripPlace({ name: place.name, location: place.location_name })}
-                      className="px-4 py-1.5 rounded-full text-xs font-bold border border-amber text-amber hover:bg-amber/10 transition-all active:scale-95"
-                    >
-                      Add to trip +
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setReviewPlace({ id: place.id, name: place.name })}
+                        className="px-3 py-1.5 rounded-full text-xs font-bold border border-line text-white hover:border-amber"
+                      >
+                        Review
+                      </button>
+                      <button 
+                        onClick={() => setActiveTripPlace({ name: place.name, location: place.location_name, placeId: place.id })}
+                        className="px-4 py-1.5 rounded-full text-xs font-bold border border-amber text-amber hover:bg-amber/10 transition-all active:scale-95"
+                      >
+                        Add to trip +
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -253,10 +263,13 @@ export default function ExplorePage() {
         <AddToTripModal 
           isOpen={Boolean(activeTripPlace)} 
           placeName={activeTripPlace.name} 
-          placeLocation={activeTripPlace.location} 
+          placeLocation={activeTripPlace.location}
+          placeId={activeTripPlace.placeId} 
           onClose={() => setActiveTripPlace(null)} 
         />
       )}
+
+      <ReviewModal place={reviewPlace} onClose={() => setReviewPlace(null)} />
 
       {activeClaimPlace && (
         <ClaimListingModal 

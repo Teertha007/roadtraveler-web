@@ -1,8 +1,10 @@
 import fs from "fs";
 import path from "path";
+import os from "os";
 import crypto from "crypto";
 
-const FILE = path.join(process.cwd(), ".data", "db.json");
+// Keep the DB outside the Next project so Turbopack never watches it.
+const FILE = path.join(process.env.LOCALAPPDATA || os.tmpdir(), "roadtraveler-web", "db.json");
 
 export type Profile = {
   id: string;
@@ -41,6 +43,7 @@ export type PostRow = {
   place_id: string | null;
   likes_count: number;
   comments_count: number;
+  photos: string[];
   created_at: string;
 };
 
@@ -121,6 +124,9 @@ export type Badge = {
 
 type Password = { user_id: string; salt: string; hash: string };
 
+export type StoryRow = { id: string; user_id: string; caption: string; image_url: string | null; created_at: string };
+export type Notice = { id: string; user_id: string; text: string; read: boolean; created_at: string };
+
 type DB = {
   profiles: Profile[];
   passwords: Password[];
@@ -136,6 +142,10 @@ type DB = {
   reviews: ReviewRow[];
   badges: Badge[];
   user_badges: { user_id: string; badge_id: string; is_showcased: boolean }[];
+  stories: StoryRow[];
+  notifications: Notice[];
+  bookmarks: { user_id: string; post_id: string }[];
+  guide_saves: { user_id: string; guide_id: string }[];
 };
 
 const COLORS = ["bg-amber-600", "bg-emerald-600", "bg-blue-600", "bg-purple-600", "bg-rose-600"];
@@ -232,10 +242,10 @@ function seed(): DB {
     passwords: [{ user_id: "u-teertha", ...pw }],
     places,
     posts: [
-      { id: "post-1", author_id: "u-sarah", title: "Sunrise at Horseshoe Bend was worth the 4am alarm", content: "Parked the van at the overlook lot ($10, opens at 5). Walk is 15 min on a paved path — easy with kids. Bring a wide lens, the bend barely fits.", tag: "#Arizona", is_recommended: true, place_id: "p1", likes_count: 248, comments_count: 2, created_at: ago(2) },
-      { id: "post-2", author_id: "u-john", title: "Moab Overland Fest · Sat Oct 18 — rigs, trail runs, campfire talks", content: "Two-day gathering for off-roaders and RVers. Free camping on site, vendor row, guided Hell's Revenge run at 9am. 212 travelers are going.", tag: "#Event", is_recommended: null, place_id: "p2", likes_count: 96, comments_count: 0, created_at: ago(5) },
-      { id: "post-3", author_id: "u-joe", title: "Skip this rest stop overnight — no shade, generators all night", content: "Lot was packed with semis by 8pm. No potable water, restrooms locked after 10. Drive 20 more minutes to the BLM pullout near Green River instead.", tag: "#RestStop", is_recommended: false, place_id: "p3", likes_count: 54, comments_count: 0, created_at: ago(9) },
-      { id: "post-4", author_id: "u-family", title: "7 Florida beach campgrounds 10 feet from the water", content: "We spent the winter hopping between them. Here's which ones have hookups, which ones book out 11 months ahead, and the one nobody talks about.", tag: "#Guide", is_recommended: true, place_id: "p5", likes_count: 412, comments_count: 0, created_at: ago(26) },
+      { id: "post-1", author_id: "u-sarah", title: "Sunrise at Horseshoe Bend was worth the 4am alarm", content: "Parked the van at the overlook lot ($10, opens at 5). Walk is 15 min on a paved path — easy with kids. Bring a wide lens, the bend barely fits.", tag: "#Arizona", is_recommended: true, place_id: "p1", likes_count: 248, comments_count: 2, photos: [], created_at: ago(2) },
+      { id: "post-2", author_id: "u-john", title: "Moab Overland Fest · Sat Oct 18 — rigs, trail runs, campfire talks", content: "Two-day gathering for off-roaders and RVers. Free camping on site, vendor row, guided Hell's Revenge run at 9am. 212 travelers are going.", tag: "#Event", is_recommended: null, place_id: "p2", likes_count: 96, comments_count: 0, photos: [], created_at: ago(5) },
+      { id: "post-3", author_id: "u-joe", title: "Skip this rest stop overnight — no shade, generators all night", content: "Lot was packed with semis by 8pm. No potable water, restrooms locked after 10. Drive 20 more minutes to the BLM pullout near Green River instead.", tag: "#RestStop", is_recommended: false, place_id: "p3", likes_count: 54, comments_count: 0, photos: [], created_at: ago(9) },
+      { id: "post-4", author_id: "u-family", title: "7 Florida beach campgrounds 10 feet from the water", content: "We spent the winter hopping between them. Here's which ones have hookups, which ones book out 11 months ahead, and the one nobody talks about.", tag: "#Guide", is_recommended: true, place_id: "p5", likes_count: 412, comments_count: 0, photos: [], created_at: ago(26) },
     ],
     likes: [],
     comments: [
@@ -265,19 +275,67 @@ function seed(): DB {
       { user_id: "u-teertha", badge_id: "first_review", is_showcased: true },
       { user_id: "u-teertha", badge_id: "first_stop", is_showcased: true },
     ],
+    stories: [
+      { id: "st1", user_id: "u-sarah", caption: "First light on the Colorado River.", image_url: null, created_at: ago(2) },
+      { id: "st2", user_id: "u-john", caption: "Hell's Revenge, then campfire.", image_url: null, created_at: ago(4) },
+      { id: "st3", user_id: "u-joe", caption: "Dispersed camp at 9,500 ft.", image_url: null, created_at: ago(6) },
+    ],
+    notifications: [
+      { id: "n1", user_id: "u-teertha", text: "Sarah Adventures liked a post you follow", read: false, created_at: ago(1) },
+      { id: "n2", user_id: "u-teertha", text: "Moab Overland Fest is coming up on Oct 18", read: false, created_at: ago(20) },
+    ],
+    bookmarks: [],
+    guide_saves: [],
   };
 }
 
 let queue: Promise<unknown> = Promise.resolve();
 
-function read(): DB {
-  if (!fs.existsSync(FILE)) {
-    fs.mkdirSync(path.dirname(FILE), { recursive: true });
-    const db = seed();
-    fs.writeFileSync(FILE, JSON.stringify(db, null, 2));
-    return db;
+function migrate(db: DB) {
+  let changed = false;
+  if (!db.stories) { db.stories = []; changed = true; }
+  if (!db.notifications) { db.notifications = []; changed = true; }
+  if (!db.bookmarks) { db.bookmarks = []; changed = true; }
+  if (!db.guide_saves) { db.guide_saves = []; changed = true; }
+  for (const post of db.posts) {
+    if (!post.photos) { post.photos = []; changed = true; }
   }
-  return JSON.parse(fs.readFileSync(FILE, "utf8")) as DB;
+  if (db.notifications.length === 0) {
+    const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
+    db.notifications.push(
+      { id: "n1", user_id: "u-teertha", text: "Sarah Adventures posted from Horseshoe Bend", read: false, created_at: ago(1) },
+      { id: "n2", user_id: "u-teertha", text: "Moab Overland Fest is coming up on Oct 18", read: false, created_at: ago(20) }
+    );
+    changed = true;
+  }
+  if (db.stories.length === 0) {
+    const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
+    db.stories.push(
+      { id: "st1", user_id: "u-sarah", caption: "First light on the Colorado River.", image_url: null, created_at: ago(2) },
+      { id: "st2", user_id: "u-john", caption: "Hell's Revenge, then campfire.", image_url: null, created_at: ago(4) },
+      { id: "st3", user_id: "u-joe", caption: "Dispersed camp at 9,500 ft.", image_url: null, created_at: ago(6) }
+    );
+    changed = true;
+  }
+  return changed;
+}
+
+function read(): { db: DB; changed: boolean } {
+  if (!fs.existsSync(FILE)) {
+    const legacy = path.join(process.cwd(), ".data", "db.json");
+    if (fs.existsSync(legacy)) {
+      fs.mkdirSync(path.dirname(FILE), { recursive: true });
+      fs.copyFileSync(legacy, FILE);
+    } else {
+      fs.mkdirSync(path.dirname(FILE), { recursive: true });
+      const db = seed();
+      fs.writeFileSync(FILE, JSON.stringify(db, null, 2));
+      return { db, changed: false };
+    }
+  }
+  const db = JSON.parse(fs.readFileSync(FILE, "utf8")) as DB;
+  const changed = migrate(db);
+  return { db, changed };
 }
 
 function write(db: DB) {
@@ -287,9 +345,11 @@ function write(db: DB) {
 
 function withDb<T>(fn: (db: DB) => T): Promise<T> {
   const run = queue.then(() => {
-    const db = read();
+    const { db, changed } = read();
+    const before = JSON.stringify(db);
     const result = fn(db);
-    write(db);
+    const after = JSON.stringify(db);
+    if (changed || before !== after) write(db);
     return result;
   });
   queue = run.then(() => undefined, () => undefined);
@@ -331,8 +391,14 @@ function toFeed(db: DB, post: PostRow, viewerId: string | null) {
     imageText: place ? `${place.name} · ${place.location_name}` : undefined,
     actionButton: isEvent ? "I'm going →" : "Add to trip +",
     place_id: post.place_id,
+    photos: post.photos || [],
+    saved_by_me: viewerId ? db.bookmarks.some((b) => b.post_id === post.id && b.user_id === viewerId) : false,
     created_at: post.created_at,
   };
+}
+
+function notify(db: DB, userId: string, text: string) {
+  db.notifications.unshift({ id: id(), user_id: userId, text, read: false, created_at: new Date().toISOString() });
 }
 
 function toEvent(db: DB, event: EventRow, viewerId: string | null) {
@@ -388,7 +454,7 @@ export const store = {
     });
   },
 
-  async getPosts(viewerId: string | null, filter?: { tag?: string; search?: string }) {
+  async getPosts(viewerId: string | null, filter?: { tag?: string; search?: string; lat?: number; lng?: number; radius?: number }) {
     return withDb((db) => {
       let rows = [...db.posts].sort((a, b) => b.created_at.localeCompare(a.created_at));
       if (filter?.search) {
@@ -402,14 +468,22 @@ export const store = {
         });
       }
       if (filter?.tag) {
-        const t = filter.tag.toLowerCase();
-        rows = rows.filter((p) => p.tag.toLowerCase().includes(t) || (p.place_id && db.places.find((x) => x.id === p.place_id)?.category.includes(t)));
+        const t = filter.tag.toLowerCase().replace(/\s+/g, "");
+        const category = t.includes("camp") ? "campground" : t.includes("rv") ? "rv_park" : t.includes("beach") ? "beach" : t.includes("trail") ? "trail" : "";
+        rows = rows.filter((p) => p.tag.toLowerCase().includes(t) || (category && p.place_id && db.places.find((x) => x.id === p.place_id)?.category === category));
+      }
+      if (filter?.lat !== undefined && filter?.lng !== undefined) {
+        const radius = filter.radius || 50;
+        rows = rows.filter((p) => {
+          const place = p.place_id ? db.places.find((x) => x.id === p.place_id) : null;
+          return place ? miles(filter.lat!, filter.lng!, place.lat, place.lng) <= radius : false;
+        });
       }
       return rows.map((p) => toFeed(db, p, viewerId));
     });
   },
 
-  async createPost(userId: string, input: { title?: string; text: string; tag?: string; place_id?: string | null; is_recommended?: boolean | null }) {
+  async createPost(userId: string, input: { title?: string; text: string; tag?: string; place_id?: string | null; is_recommended?: boolean | null; photos?: string[] }) {
     return withDb((db) => {
       const user = profile(db, userId);
       if (!user) throw new Error("Sign in required.");
@@ -423,6 +497,7 @@ export const store = {
         place_id: input.place_id || null,
         likes_count: 0,
         comments_count: 0,
+        photos: input.photos || [],
         created_at: new Date().toISOString(),
       };
       db.posts.unshift(post);
@@ -443,6 +518,10 @@ export const store = {
       }
       db.likes.push({ post_id: postId, user_id: userId });
       post.likes_count += 1;
+      if (post.author_id !== userId) {
+        const who = profile(db, userId)?.display_name || "Someone";
+        notify(db, post.author_id, `${who} liked your post “${post.title.slice(0, 48)}”`);
+      }
       return { liked: true, likes: post.likes_count };
     });
   },
@@ -469,6 +548,7 @@ export const store = {
       db.comments.push(row);
       post.comments_count += 1;
       user.points += 2;
+      if (post.author_id !== userId) notify(db, post.author_id, `${user.display_name} commented on “${post.title.slice(0, 48)}”`);
       return { id: row.id, author: user.display_name, initial: user.display_name[0], color: colorFor(userId), text: row.content, time: "Just now", comments_count: post.comments_count };
     });
   },
@@ -663,6 +743,74 @@ export const store = {
       place.reviews_count = mine.length;
       place.rating = Math.round((mine.reduce((s, r) => s + r.rating, 0) / mine.length) * 10) / 10;
       return review;
+    });
+  },
+
+  async reviewsFor(placeId: string) {
+    return withDb((db) =>
+      db.reviews
+        .filter((r) => r.place_id === placeId)
+        .map((r) => ({ ...r, author: profile(db, r.user_id)?.display_name || "Traveler", time: relativeTime(r.created_at) }))
+    );
+  },
+
+  async stories() {
+    return withDb((db) =>
+      [...db.stories]
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .map((s) => {
+          const author = profile(db, s.user_id);
+          return { ...s, author: author?.display_name || "Traveler", time: relativeTime(s.created_at) };
+        })
+    );
+  },
+
+  async addStory(userId: string, input: { caption: string; image_url?: string | null }) {
+    return withDb((db) => {
+      const user = profile(db, userId);
+      if (!user) throw new Error("Sign in required.");
+      const story: StoryRow = { id: id(), user_id: userId, caption: input.caption.trim(), image_url: input.image_url || null, created_at: new Date().toISOString() };
+      db.stories.unshift(story);
+      return { ...story, author: user.display_name, time: "Just now" };
+    });
+  },
+
+  async notifications(userId: string) {
+    return withDb((db) => db.notifications.filter((n) => n.user_id === userId).map((n) => ({ ...n, time: relativeTime(n.created_at) })));
+  },
+
+  async markNotificationsRead(userId: string) {
+    return withDb((db) => {
+      for (const n of db.notifications) if (n.user_id === userId) n.read = true;
+      return { ok: true };
+    });
+  },
+
+  async toggleBookmark(userId: string, postId: string) {
+    return withDb((db) => {
+      const i = db.bookmarks.findIndex((b) => b.user_id === userId && b.post_id === postId);
+      if (i >= 0) {
+        db.bookmarks.splice(i, 1);
+        return { saved: false };
+      }
+      db.bookmarks.push({ user_id: userId, post_id: postId });
+      return { saved: true };
+    });
+  },
+
+  async guideSaves(userId: string | null) {
+    return withDb((db) => (userId ? db.guide_saves.filter((g) => g.user_id === userId).map((g) => g.guide_id) : []));
+  },
+
+  async toggleGuide(userId: string, guideId: string) {
+    return withDb((db) => {
+      const i = db.guide_saves.findIndex((g) => g.user_id === userId && g.guide_id === guideId);
+      if (i >= 0) {
+        db.guide_saves.splice(i, 1);
+        return { saved: false };
+      }
+      db.guide_saves.push({ user_id: userId, guide_id: guideId });
+      return { saved: true };
     });
   },
 };
