@@ -17,10 +17,14 @@ export function supabaseConfigured() {
   return Boolean(url && key && !url.includes("your-project") && !url.includes("mock") && !key.includes("your-"));
 }
 
-/** Local JSON DB is only for development machines — never on Vercel. */
+/**
+ * JSON file DB:
+ * - Dev machines with ALLOW_LOCAL_DB
+ * - Optional ephemeral /tmp on Vercel (ALLOW_EPHEMERAL_DB) until Supabase is wired
+ */
 export function useLocalDb() {
-  if (isVercel()) return false;
   if (supabaseConfigured()) return false;
+  if (isVercel()) return truthy(process.env.ALLOW_EPHEMERAL_DB);
   if (isProduction() && !truthy(process.env.ALLOW_LOCAL_DB)) return false;
   return true;
 }

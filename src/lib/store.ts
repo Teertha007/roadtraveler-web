@@ -18,7 +18,12 @@ const DEMO_IMG = {
 } as const;
 
 // Keep the local DB outside the Next project so Turbopack never watches it.
-const FILE = path.join(process.env.LOCALAPPDATA || os.tmpdir(), "roadtraveler-web", "db.json");
+// On Vercel (ephemeral mode) this is /tmp and resets when the instance recycles.
+const FILE = path.join(
+  process.env.VERCEL ? os.tmpdir() : process.env.LOCALAPPDATA || os.tmpdir(),
+  "roadtraveler-web",
+  "db.json"
+);
 
 export type Profile = {
   id: string;
