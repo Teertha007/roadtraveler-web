@@ -4,6 +4,9 @@ import path from "path";
 const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
+  experimental: {
+    agentUpgrade: "security",
+  },
   turbopack: {
     // Keep Turbopack rooted in this app so it stops watching C:\Users\teert\package-lock.json
     root: path.join(__dirname),
